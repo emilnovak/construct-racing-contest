@@ -10,6 +10,7 @@ from std_msgs.msg import ColorRGBA
 from waypoint_msgs.msg import *
 from waypoint_msgs.srv import *
 
+from math import pi
 
 class WaypointManager(Node):
     def __init__(self):
@@ -67,7 +68,7 @@ class WaypointManager(Node):
                 lookup.transform.rotation.w,
             )
 
-            x, y, z, w = quat_from_euler(0, 0, yaw)
+            x, y, z, w = quat_from_euler(0, 0, yaw+pi)
 
             pose.orientation.x = x
             pose.orientation.y = y
