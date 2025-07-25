@@ -4,7 +4,9 @@ from rclpy.duration import Duration
 from tf2_ros import Buffer, TransformListener, TransformException
 from .utilities import euler_from_quat, quat_from_euler
 
+from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Pose
+from std_msgs.msg import ColorRGBA
 from waypoint_msgs.msg import *
 from waypoint_msgs.srv import *
 
@@ -23,6 +25,8 @@ class WaypointManager(Node):
 
         # initialize waypoints
         self.waypoints = []
+
+        self.marker_publisher = self.create_publisher(Marker, 'waypoints', 10)
 
         self.append_srv = self.create_service(AppendWaypoint, 'waypoint/append', self.append_cb)
         self.delete_srv = self.create_service(DeleteWaypoint, 'waypoint/delete', self.delete_cb)
@@ -110,6 +114,33 @@ class WaypointManager(Node):
         response.success = False
         response.message = 'Missing implementation'
         return response
+
+    def publish_markers(self):
+
+        delete_marker = Marker()
+        delete_marker.action = Marker.DELETEALL
+        delete_marker.header.frame_id = self.map_link_name
+        self.marker_publisher.publish(delete_marker)
+
+        for i, waypoint in enumerate(self.waypoints):
+            m = Marker()
+
+            m.header.frame_id = self.map_link_name
+            m.ns = 'waypoints'
+            m.id = i
+            m.type = Marker.ARROW
+            m.action = Marker.ADD
+
+            m.pose.position = waypoint.position
+            m.pose.orientation = waypoint.orientation
+
+            m.scale.x = 0.5
+            m.scale.y = 0.1
+            m.scale.z = 0.1
+
+            m.color = ColorRGBA(r=1.0, g=.0, b=.0, a=1.0)
+
+            self.marker_publisher.publish(m)
 
 
 def main():
