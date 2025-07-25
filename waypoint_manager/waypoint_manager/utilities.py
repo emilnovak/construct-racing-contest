@@ -2,7 +2,7 @@ import numpy as np
 
 
 # https://stackoverflow.com/a/56207565
-def euler_from_quat(w, x, y, z):
+def euler_from_quat(x, y, z, w):
     ysqr = y * y
 
     t0 = +2.0 * (w * x + y * z)
@@ -34,4 +34,4 @@ def quat_from_euler(roll, pitch, yaw):
     y = cr * sp * cy + sr * cp * sy
     z = cr * cp * sy - sr * sp * cy
 
-    return w, x, y, z
+    return x, y, z, w
