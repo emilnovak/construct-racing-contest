@@ -11,6 +11,7 @@ from waypoint_msgs.msg import *
 from waypoint_msgs.srv import *
 
 from math import pi
+from copy import deepcopy
 
 class WaypointManager(Node):
     def __init__(self):
@@ -123,25 +124,61 @@ class WaypointManager(Node):
         delete_marker.header.frame_id = self.map_link_name
         self.marker_publisher.publish(delete_marker)
 
+        # LINESTRIP
+        line_strip_marker = Marker()
+        line_strip_marker.header.frame_id = self.map_link_name
+        line_strip_marker.ns = 'waypoint_lines'
+        line_strip_marker.id = 9999
+        line_strip_marker.type = Marker.LINE_STRIP
+        line_strip_marker.action = Marker.ADD
+        line_strip_marker.scale.x = 0.1
+        line_strip_marker.color = ColorRGBA(r=0.0, g=1.0, b=0.0, a=0.5)
+        line_strip_marker.points = []
+
         for i, waypoint in enumerate(self.waypoints):
-            m = Marker()
 
-            m.header.frame_id = self.map_link_name
-            m.ns = 'waypoints'
-            m.id = i
-            m.type = Marker.ARROW
-            m.action = Marker.ADD
+            # Common marker properties
+            base_marker = Marker()
 
-            m.pose.position = waypoint.position
-            m.pose.orientation = waypoint.orientation
+            base_marker.header.frame_id = self.map_link_name
+            base_marker.action = Marker.ADD
+            base_marker.pose.position = waypoint.position
+            base_marker.pose.orientation = waypoint.orientation
 
-            m.scale.x = 0.5
-            m.scale.y = 0.1
-            m.scale.z = 0.1
+            # ARROW markers
+            arrow_marker = deepcopy(base_marker)
 
-            m.color = ColorRGBA(r=1.0, g=.0, b=.0, a=1.0)
+            arrow_marker.ns = 'waypoints'
+            arrow_marker.id = i
+            arrow_marker.type = Marker.ARROW
+            arrow_marker.scale.x = 1.0
+            arrow_marker.scale.y = 0.1
+            arrow_marker.scale.z = 0.1
+            arrow_marker.color = ColorRGBA(r=1.0, g=.0, b=.0, a=0.5)
 
-            self.marker_publisher.publish(m)
+            self.marker_publisher.publish(arrow_marker)
+
+            # TEXT markers
+            text_marker = deepcopy(base_marker)
+            text_marker.ns = 'waypoint_id'
+            text_marker.id = i + 10000
+            text_marker.type = Marker.TEXT_VIEW_FACING
+            text_marker.color = ColorRGBA(r=1.0, g=1.0, b=1.0, a=1.0)
+            text_marker.pose.position.y = base_marker.pose.position.y + 0.1
+            text_marker.pose.position.z = base_marker.pose.position.z + 0.2
+            text_marker.scale.z = 0.5
+            text_marker.text = str(i)
+
+            self.marker_publisher.publish(text_marker)
+
+            # LINE_STRIP markers
+            line_strip_marker.points.append(waypoint.position)
+
+        # Connect first and last waypoints and publish
+        if self.waypoints and len(self.waypoints) > 1:
+            line_strip_marker.points.append(self.waypoints[0].position)
+
+            self.marker_publisher.publish(line_strip_marker)
 
 
 def main():
