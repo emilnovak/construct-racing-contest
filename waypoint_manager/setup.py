@@ -20,6 +20,7 @@ setup(
     # tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'waypoint_manager = waypoint_manager.waypoint_manager:main'
         ],
     },
 )
