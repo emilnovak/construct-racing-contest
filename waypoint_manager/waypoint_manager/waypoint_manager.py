@@ -2,6 +2,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.duration import Duration
 from tf2_ros import Buffer, TransformListener, TransformException
+from .utilities import euler_from_quat, quat_from_euler
 
 from waypoint_msgs.msg import *
 from waypoint_msgs.srv import *
@@ -13,6 +14,8 @@ class WaypointManager(Node):
 
         self.map_link_name = 'fastbot_1_odom'
         self.base_link_name = 'fastbot_1_base_link'
+
+        self.flatten_transforms = True
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -38,6 +41,24 @@ class WaypointManager(Node):
             response.success = False
             response.message = f'Tranform exception: {e}'
             return response
+
+        # project to xy plane
+        if self.flatten_transforms:
+            pose.transform.translation.z = .0
+
+            (roll, pitch, yaw) = euler_from_quat(
+                pose.transform.rotation.x,
+                pose.transform.rotation.y,
+                pose.transform.rotation.z,
+                pose.transform.rotation.w,
+            )
+
+            x, y, z, w = quat_from_euler(0, 0, yaw)
+
+            pose.transform.rotation.x = x
+            pose.transform.rotation.y = y
+            pose.transform.rotation.z = z
+            pose.transform.rotation.w = w
 
         self.waypoints.append(pose.transform)
         response.success = True
