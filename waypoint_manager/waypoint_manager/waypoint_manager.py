@@ -12,6 +12,7 @@ from waypoint_msgs.srv import *
 
 from math import pi
 from copy import deepcopy
+from yaml import dump, safe_load
 
 class WaypointManager(Node):
     def __init__(self):
@@ -22,10 +23,11 @@ class WaypointManager(Node):
 
         self.flatten_transforms = True
 
+        self.map_path = '/home/user/ros2_ws/src/construct-racing-contest/map/waypoints.yaml'
+
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        # initialize waypoints
         self.waypoints = []
 
         self.marker_publisher = self.create_publisher(Marker, 'waypoints', 10)
@@ -38,6 +40,17 @@ class WaypointManager(Node):
         self.save_srv = self.create_service(SaveWaypoints, 'waypoint/save', self.save_cb)
         
         self.get_logger().info('Initialized')
+
+        # Load markers after some spin
+        self.load_map_timer = self.create_timer(
+            1.0,
+            lambda: (
+                self.get_logger().info('Load map lambda runs'),
+                self.load_map_timer.cancel(),
+                self.load_map()
+            )
+        )
+
 
     def append_cb(self, request, response):
         self.get_logger().info('append called')
@@ -111,13 +124,55 @@ class WaypointManager(Node):
         return response
 
     def save_cb(self, request, response):
-        self.get_logger().info('save called')
+        waypoints_data = [{
+            'position': {
+                'x': float(p.position.x),
+                'y': float(p.position.y),
+                'z': float(p.position.z),
+            },
+            'orientation': {
+                'x': float(p.orientation.x),
+                'y': float(p.orientation.y),
+                'z': float(p.orientation.z),
+                'w': float(p.orientation.w),
+            }
+        } for p in self.waypoints]
 
-        response.success = False
-        response.message = 'Missing implementation'
+        try:
+            with open(self.map_path, 'w') as f:
+                dump(waypoints_data, f)
+            response.success = True
+        except Exception as e:
+            self.get_logger().error('Error saving map yaml: {e}')
+            response.success = False
+            response.message = str(e)
+
         return response
 
+    def load_map(self):
+        try:
+            with open(self.map_path, 'r') as f:
+                data = safe_load(f)
+
+            self.waypoints = []
+            for item in data:
+                pose = Pose()
+                pose.position.x = item['position']['x']
+                pose.position.y = item['position']['y']
+                pose.position.z = item['position']['z']
+                pose.orientation.x = item['orientation']['x']
+                pose.orientation.y = item['orientation']['y']
+                pose.orientation.z = item['orientation']['z']
+                pose.orientation.w = item['orientation']['w']
+                self.waypoints.append(pose)
+
+        except Exception as e:
+            self.get_logger().error(f'Error while loading map yaml: {e}')
+
+        self.publish_markers()
+
     def publish_markers(self):
+        self.get_logger().info('publishing markers')
 
         delete_marker = Marker()
         delete_marker.action = Marker.DELETEALL
