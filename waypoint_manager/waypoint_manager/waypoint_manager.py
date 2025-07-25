@@ -4,6 +4,7 @@ from rclpy.duration import Duration
 from tf2_ros import Buffer, TransformListener, TransformException
 from .utilities import euler_from_quat, quat_from_euler
 
+from geometry_msgs.msg import Pose
 from waypoint_msgs.msg import *
 from waypoint_msgs.srv import *
 
@@ -36,31 +37,42 @@ class WaypointManager(Node):
         self.get_logger().info('append called')
 
         try:
-            pose = self.tf_buffer.lookup_transform(self.map_link_name, self.base_link_name, rclpy.time.Time(), timeout=Duration(seconds=0.1))
+            lookup = self.tf_buffer.lookup_transform(self.map_link_name, self.base_link_name, rclpy.time.Time(), timeout=Duration(seconds=0.1))
         except TransformException as e:
             response.success = False
             response.message = f'Tranform exception: {e}'
             return response
 
+        pose = Pose()
+        pose.position.x = lookup.transform.translation.x
+        pose.position.y = lookup.transform.translation.y
+        pose.position.z = lookup.transform.translation.z
+        pose.orientation.x = lookup.transform.rotation.x
+        pose.orientation.y = lookup.transform.rotation.y
+        pose.orientation.z = lookup.transform.rotation.z
+        pose.orientation.w = lookup.transform.rotation.w
+
         # project to xy plane
         if self.flatten_transforms:
-            pose.transform.translation.z = .0
+            pose.position.z = .0
 
             (roll, pitch, yaw) = euler_from_quat(
-                pose.transform.rotation.x,
-                pose.transform.rotation.y,
-                pose.transform.rotation.z,
-                pose.transform.rotation.w,
+                lookup.transform.rotation.x,
+                lookup.transform.rotation.y,
+                lookup.transform.rotation.z,
+                lookup.transform.rotation.w,
             )
 
             x, y, z, w = quat_from_euler(0, 0, yaw)
 
-            pose.transform.rotation.x = x
-            pose.transform.rotation.y = y
-            pose.transform.rotation.z = z
-            pose.transform.rotation.w = w
+            pose.orientation.x = x
+            pose.orientation.y = y
+            pose.orientation.z = z
+            pose.orientation.w = w
 
-        self.waypoints.append(pose.transform)
+        self.waypoints.append(pose)
+        self.publish_markers()
+
         response.success = True
         return response
 
