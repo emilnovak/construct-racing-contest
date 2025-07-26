@@ -46,7 +46,6 @@ class WaypointManager(Node):
         self.append_srv = self.create_service(AppendWaypoint, 'waypoint/append', self.append_cb)
         self.delete_srv = self.create_service(DeleteWaypoint, 'waypoint/delete', self.delete_cb)
         self.insert_srv = self.create_service(InsertWaypoint, 'waypoint/insert', self.insert_cb)
-        self.load_srv = self.create_service(LoadWaypoints, 'waypoint/load', self.load_cb)
         self.overwrite_srv = self.create_service(OverwriteWaypoint, 'waypoint/overwrite', self.overwrite_cb)
         self.save_srv = self.create_service(SaveWaypoints, 'waypoint/save', self.save_cb)
         
@@ -113,13 +112,6 @@ class WaypointManager(Node):
 
         response.success = True
         response.message = f'Inserted at index {index}'
-        return response
-
-    def load_cb(self, request, response):
-        self.get_logger().info('load called')
-
-        response.success = False
-        response.message = 'Missing implementation'
         return response
 
     def overwrite_cb(self, request, response):

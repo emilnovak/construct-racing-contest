@@ -18,7 +18,6 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/AppendWaypoint.srv"
   "srv/DeleteWaypoint.srv"
   "srv/InsertWaypoint.srv"
-  "srv/LoadWaypoints.srv"
   "srv/OverwriteWaypoint.srv"
   "srv/SaveWaypoints.srv"
   DEPENDENCIES geometry_msgs
