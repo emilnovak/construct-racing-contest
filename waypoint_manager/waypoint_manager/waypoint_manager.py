@@ -64,44 +64,15 @@ class WaypointManager(Node):
 
     def append_cb(self, request, response):
         self.get_logger().info('append called')
-
-        try:
-            lookup = self.tf_buffer.lookup_transform(self.map_link_name, self.base_link_name, rclpy.time.Time(), timeout=Duration(seconds=0.1))
-        except TransformException as e:
+        pose, error = self.get_current_pose()
+        if pose is None:
             response.success = False
-            response.message = f'Tranform exception: {e}'
+            response.message = f'Transform error: {error}'
             return response
-
-        pose = Pose()
-        pose.position.x = lookup.transform.translation.x
-        pose.position.y = lookup.transform.translation.y
-        pose.position.z = lookup.transform.translation.z
-        pose.orientation.x = lookup.transform.rotation.x
-        pose.orientation.y = lookup.transform.rotation.y
-        pose.orientation.z = lookup.transform.rotation.z
-        pose.orientation.w = lookup.transform.rotation.w
-
-        # project to xy plane
-        if self.flatten_transforms:
-            pose.position.z = .0
-
-            (roll, pitch, yaw) = euler_from_quat(
-                lookup.transform.rotation.x,
-                lookup.transform.rotation.y,
-                lookup.transform.rotation.z,
-                lookup.transform.rotation.w,
-            )
-
-            x, y, z, w = quat_from_euler(0, 0, yaw+pi)
-
-            pose.orientation.x = x
-            pose.orientation.y = y
-            pose.orientation.z = z
-            pose.orientation.w = w
 
         self.waypoints.append(pose)
         self.publish_markers()
-
+        self.publish_path()
         response.success = True
         return response
 
@@ -158,6 +129,43 @@ class WaypointManager(Node):
             response.message = str(e)
 
         return response
+
+    def get_current_pose(self):
+        try:
+            lookup = self.tf_buffer.lookup_transform(
+                self.map_link_name,
+                self.base_link_name,
+                rclpy.time.Time(),
+                timeout=Duration(seconds=0.1)
+            )
+        except TransformException as e:
+            self.get_logger().error(f'Transform exception: {e}')
+            return None, str(e)
+
+        pose = Pose()
+        pose.position.x = lookup.transform.translation.x
+        pose.position.y = lookup.transform.translation.y
+        pose.position.z = lookup.transform.translation.z
+        pose.orientation.x = lookup.transform.rotation.x
+        pose.orientation.y = lookup.transform.rotation.y
+        pose.orientation.z = lookup.transform.rotation.z
+        pose.orientation.w = lookup.transform.rotation.w
+
+        if self.flatten_transforms:
+            pose.position.z = 0.0
+            (roll, pitch, yaw) = euler_from_quat(
+                lookup.transform.rotation.x,
+                lookup.transform.rotation.y,
+                lookup.transform.rotation.z,
+                lookup.transform.rotation.w,
+            )
+            x, y, z, w = quat_from_euler(0, 0, yaw + pi)
+            pose.orientation.x = x
+            pose.orientation.y = y
+            pose.orientation.z = z
+            pose.orientation.w = w
+
+        return pose, None
 
     def load_map(self):
         try:
