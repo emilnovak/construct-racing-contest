@@ -94,9 +94,25 @@ class WaypointManager(Node):
 
     def insert_cb(self, request, response):
         self.get_logger().info('insert called')
+        index = request.id
 
-        response.success = False
-        response.message = 'Missing implementation'
+        if index < 0 or index > len(self.waypoints):
+            response.success = False
+            response.message = f'Invalid index {index}'
+            return response
+
+        pose, error = self.get_current_pose()
+        if pose is None:
+            response.success = False
+            response.message = f'Transform error: {error}'
+            return response
+
+        self.waypoints.insert(index, pose)
+        self.publish_markers()
+        self.publish_path()
+
+        response.success = True
+        response.message = f'Inserted at index {index}'
         return response
 
     def load_cb(self, request, response):
