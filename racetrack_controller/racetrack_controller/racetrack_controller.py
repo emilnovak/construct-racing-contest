@@ -8,6 +8,7 @@ from nav_msgs.msg import Path, Odometry
 from geometry_msgs.msg import Twist
 from geometry_msgs.msg import PoseStamped
 from visualization_msgs.msg import Marker
+from std_srvs.srv import Trigger
 
 
 class RacetrackController(Node):
@@ -16,6 +17,8 @@ class RacetrackController(Node):
 
         # Parameters
         self.dry_run = False
+        self.paused = False
+        self.zero_velocity_sent = False
 
         self.lookahead_distance = 1.5
         self.max_linear_speed = 2.5
@@ -42,12 +45,31 @@ class RacetrackController(Node):
         self.local_plan_pub = self.create_publisher(Path, '/fastbot_1/local_plan', 10)
         self.target_marker_pub = self.create_publisher(Marker, '/fastbot_1/target_marker', 10)
 
+        # Services
+        self.create_service(
+            srv_type=Trigger,
+            srv_name='/racetrack_controller/pause_toggle',
+            callback=self.pause_service_callback
+        )
+
         self.path = []
         self.received_path = False
 
     def publish_zero_velocity(self):
         stop_msg = Twist()
         self.cmd_pub.publish(stop_msg)
+    
+    def pause_service_callback(self, request, response):
+        self.paused = not self.paused
+        state = 'paused' if self.paused else 'resumed'
+
+        if not self.paused:
+            self.zero_velocity_sent = False  # Reset when resuming
+
+        self.get_logger().info(f'Controller {state} via service call.')
+        response.success = True
+        response.message = f'Controller {state}.'
+        return response
 
     def path_callback(self, msg: Path):
         self.path = msg.poses
@@ -112,7 +134,13 @@ class RacetrackController(Node):
         )
 
         if not self.dry_run:
-            self.cmd_pub.publish(cmd)
+            if self.paused:
+                if not self.zero_velocity_sent:
+                    self.get_logger().info('Controller is paused. Publishing zero velocity once.')
+                    self.publish_zero_velocity()
+                    self.zero_velocity_sent = True
+            else:
+                self.cmd_pub.publish(cmd)
 
         self.publish_local_plan(position, yaw, cmd.linear.x, cmd.angular.z)
 
