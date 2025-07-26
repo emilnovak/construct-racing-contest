@@ -4,7 +4,7 @@ from rclpy.duration import Duration
 from tf2_ros import Buffer, TransformListener, TransformException
 from .utilities import euler_from_quat, quat_from_euler
 
-from visualization_msgs.msg import Marker
+from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import Pose
 from std_msgs.msg import ColorRGBA
 from waypoint_msgs.msg import *
@@ -30,7 +30,7 @@ class WaypointManager(Node):
 
         self.waypoints = []
 
-        self.marker_publisher = self.create_publisher(Marker, 'waypoints', 10)
+        self.marker_publisher = self.create_publisher(MarkerArray, 'waypoints', 10)
 
         self.append_srv = self.create_service(AppendWaypoint, 'waypoint/append', self.append_cb)
         self.delete_srv = self.create_service(DeleteWaypoint, 'waypoint/delete', self.delete_cb)
@@ -50,7 +50,6 @@ class WaypointManager(Node):
                 self.load_map()
             )
         )
-
 
     def append_cb(self, request, response):
         self.get_logger().info('append called')
@@ -174,10 +173,12 @@ class WaypointManager(Node):
     def publish_markers(self):
         self.get_logger().info('publishing markers')
 
+        marker_array = MarkerArray()
+
         delete_marker = Marker()
         delete_marker.action = Marker.DELETEALL
         delete_marker.header.frame_id = self.map_link_name
-        self.marker_publisher.publish(delete_marker)
+        marker_array.markers.append(delete_marker)
 
         # LINESTRIP
         line_strip_marker = Marker()
@@ -211,7 +212,7 @@ class WaypointManager(Node):
             arrow_marker.scale.z = 0.1
             arrow_marker.color = ColorRGBA(r=1.0, g=.0, b=.0, a=0.5)
 
-            self.marker_publisher.publish(arrow_marker)
+            marker_array.markers.append(arrow_marker)
 
             # TEXT markers
             text_marker = deepcopy(base_marker)
@@ -224,7 +225,7 @@ class WaypointManager(Node):
             text_marker.scale.z = 0.5
             text_marker.text = str(i)
 
-            self.marker_publisher.publish(text_marker)
+            marker_array.markers.append(text_marker)
 
             # LINE_STRIP markers
             line_strip_marker.points.append(waypoint.position)
@@ -233,7 +234,9 @@ class WaypointManager(Node):
         if self.waypoints and len(self.waypoints) > 1:
             line_strip_marker.points.append(self.waypoints[0].position)
 
-            self.marker_publisher.publish(line_strip_marker)
+            marker_array.markers.append(line_strip_marker)
+
+        self.marker_publisher.publish(marker_array)
 
 
 def main():
