@@ -2,14 +2,16 @@ import rclpy
 from rclpy.node import Node
 from rclpy.duration import Duration
 from tf2_ros import Buffer, TransformListener, TransformException
-from .utilities import euler_from_quat, quat_from_euler
+from .utilities import euler_from_quat, quat_from_euler, catmull_rom_spline, uniform_resample
 
 from visualization_msgs.msg import Marker, MarkerArray
-from geometry_msgs.msg import Pose
+from geometry_msgs.msg import Pose, PoseStamped
+from nav_msgs.msg import Path
 from std_msgs.msg import ColorRGBA
 from waypoint_msgs.msg import *
 from waypoint_msgs.srv import *
 
+import numpy as np
 from math import pi
 from copy import deepcopy
 from yaml import dump, safe_load
@@ -30,7 +32,8 @@ class WaypointManager(Node):
 
         self.waypoints = []
 
-        self.marker_publisher = self.create_publisher(MarkerArray, 'waypoints', 10)
+
+        self.path_publisher = self.create_publisher(Path, 'waypoint/plan', 10)
 
         self.append_srv = self.create_service(AppendWaypoint, 'waypoint/append', self.append_cb)
         self.delete_srv = self.create_service(DeleteWaypoint, 'waypoint/delete', self.delete_cb)
@@ -168,7 +171,72 @@ class WaypointManager(Node):
         except Exception as e:
             self.get_logger().error(f'Error while loading map yaml: {e}')
 
+        self.publish_path()
         self.publish_markers()
+
+    def publish_path(self):
+        if len(self.waypoints) < 2:
+            self.get_logger().warn('Not enough waypoints to create a path')
+            return
+
+        # Extract xy as numpy array
+        wp_arr = np.array([[wp.position.x, wp.position.y] for wp in self.waypoints])
+
+        # Close the loop by adding last points at start and first points at end for spline
+        # If path is closed, else you can pad with duplicates or just repeat ends
+        if len(wp_arr) >= 4:
+            P = np.vstack([wp_arr[-1], wp_arr, wp_arr[0], wp_arr[1]])
+        else:
+            # If less than 4 waypoints, pad with duplicates
+            P = np.vstack([wp_arr[0], wp_arr, wp_arr[-1], wp_arr[-1]])
+
+        spline_points = []
+
+        n_points_per_segment = 10  # smoothness control
+
+        # Generate spline for each segment between wp_arr points
+        for i in range(1, len(P)-2):
+            pts = catmull_rom_spline(P[i-1], P[i], P[i+1], P[i+2], n_points_per_segment)
+            spline_points.append(pts)
+
+        spline_points = np.vstack(spline_points)
+
+        # Uniform resampling
+        spline_points = uniform_resample(spline_points, spacing=0.5)
+
+        # Build Path message
+        path_msg = Path()
+        path_msg.header.frame_id = self.map_link_name
+        path_msg.header.stamp = self.get_clock().now().to_msg()
+
+        # Calculate orientation from finite differences
+        for i in range(len(spline_points)):
+            p = spline_points[i]
+            if i < len(spline_points)-1:
+                dx = spline_points[i+1,0] - p[0]
+                dy = spline_points[i+1,1] - p[1]
+            else:
+                dx = p[0] - spline_points[i-1,0]
+                dy = p[1] - spline_points[i-1,1]
+
+            yaw = np.arctan2(dy, dx)
+            qx, qy, qz, qw = quat_from_euler(0, 0, yaw)
+
+            pose = PoseStamped()
+            pose.header.frame_id = self.map_link_name
+            pose.header.stamp = self.get_clock().now().to_msg()
+            pose.pose.position.x = float(p[0])
+            pose.pose.position.y = float(p[1])
+            pose.pose.position.z = 0.0
+            pose.pose.orientation.x = qx
+            pose.pose.orientation.y = qy
+            pose.pose.orientation.z = qz
+            pose.pose.orientation.w = qw
+
+            path_msg.poses.append(pose)
+
+        self.path_publisher.publish(path_msg)
+        self.get_logger().info(f'Published interpolated path with {len(path_msg.poses)} elements')
 
     def publish_markers(self):
         self.get_logger().info('publishing markers')
