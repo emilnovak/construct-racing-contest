@@ -79,8 +79,17 @@ class WaypointManager(Node):
     def delete_cb(self, request, response):
         self.get_logger().info('delete called')
 
-        response.success = False
-        response.message = 'Missing implementation'
+        index = request.id
+        if 0 <= index < len(self.waypoints):
+            self.waypoints.pop(index)
+            self.publish_markers()
+            self.publish_path()
+            response.success = True
+            response.message = f'Deleted waypoint at index {index}'
+        else:
+            response.success = False
+            response.message = f'Invalid index {index}'
+
         return response
 
     def insert_cb(self, request, response):
