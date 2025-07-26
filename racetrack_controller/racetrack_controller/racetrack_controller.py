@@ -16,13 +16,22 @@ class RacetrackController(Node):
         super().__init__('racetrack_controller')
 
         # Parameters
-        self.dry_run = False
-        self.paused = False
+        self.declare_parameter('start_paused', False)
+        self.declare_parameter('dev', False)
+        self.declare_parameter('dry_run', False)
+
+        self.declare_parameter('lookahead_distance', 1.5)
+        self.declare_parameter('max_linear_speed', 2.5)
+        self.declare_parameter('max_angular_speed', 2.0)
+
+        self.paused = self.get_parameter('start_paused').get_parameter_value().bool_value
+        self.dev = self.get_parameter('dev').get_parameter_value().bool_value
+        self.dry_run = self.get_parameter('dry_run').get_parameter_value().bool_value
         self.zero_velocity_sent = False
 
-        self.lookahead_distance = 1.5
-        self.max_linear_speed = 2.5
-        self.max_angular_speed = 2.0
+        self.lookahead_distance = self.get_parameter('lookahead_distance').get_parameter_value().double_value
+        self.max_linear_speed = self.get_parameter('max_linear_speed').get_parameter_value().double_value
+        self.max_angular_speed = self.get_parameter('max_angular_speed').get_parameter_value().double_value
 
         self.odom_link_name = 'fastbot_1_odom'
 
@@ -114,7 +123,8 @@ class RacetrackController(Node):
                 self.publish_zero_velocity()
             return
 
-        self.publish_target_marker(target)
+        if self.dev:
+            self.publish_target_marker(target)
 
         # Compute control command
         dx = target.pose.position.x - position.x
@@ -128,10 +138,11 @@ class RacetrackController(Node):
                             min(self.max_angular_speed, angle_diff))
 
         # Print command vs actual
-        self.get_logger().info(
-            f"[CMD] linear: {cmd.linear.x:.3f}, angular: {cmd.angular.z:.3f} | "
-            f"[ACTUAL] linear: {actual_linear_vel:.3f}, angular: {actual_angular_vel:.3f}"
-        )
+        if self.dev:
+            self.get_logger().info(
+                f"[CMD] linear: {cmd.linear.x:.3f}, angular: {cmd.angular.z:.3f} | "
+                f"[ACTUAL] linear: {actual_linear_vel:.3f}, angular: {actual_angular_vel:.3f}"
+            )
 
         if not self.dry_run:
             if self.paused:
@@ -142,7 +153,8 @@ class RacetrackController(Node):
             else:
                 self.cmd_pub.publish(cmd)
 
-        self.publish_local_plan(position, yaw, cmd.linear.x, cmd.angular.z)
+        if self.dev:
+            self.publish_local_plan(position, yaw, cmd.linear.x, cmd.angular.z)
 
     def find_lookahead_point(self, current_position):
         if not self.path:
