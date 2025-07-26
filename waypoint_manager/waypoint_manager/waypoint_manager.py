@@ -3,6 +3,8 @@ from rclpy.node import Node
 from rclpy.duration import Duration
 from tf2_ros import Buffer, TransformListener, TransformException
 from .utilities import euler_from_quat, quat_from_euler, catmull_rom_spline, uniform_resample
+from rclpy.qos import (
+    QoSProfile, QoSDurabilityPolicy, QoSReliabilityPolicy, QoSHistoryPolicy)
 
 from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import Pose, PoseStamped
@@ -32,8 +34,14 @@ class WaypointManager(Node):
 
         self.waypoints = []
 
+        transient_local_qos = QoSProfile(
+            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=1)
 
-        self.path_publisher = self.create_publisher(Path, 'waypoint/plan', 10)
+        self.marker_publisher = self.create_publisher(MarkerArray, 'waypoints', transient_local_qos)
+        self.path_publisher = self.create_publisher(Path, 'waypoint/plan', transient_local_qos)
 
         self.append_srv = self.create_service(AppendWaypoint, 'waypoint/append', self.append_cb)
         self.delete_srv = self.create_service(DeleteWaypoint, 'waypoint/delete', self.delete_cb)
